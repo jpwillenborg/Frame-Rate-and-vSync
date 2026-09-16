@@ -1,81 +1,87 @@
 using UnityEngine;
-using UnityEngine.Rendering;
-using UnityEngine.Rendering.Universal;
 using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine.UI;
 using TMPro;
+using System.Runtime.InteropServices;
 
 
 public class ResolutionManager : MonoBehaviour
 {
     [SerializeField]
-	private CanvasScaler screenInfoCanvas;
+    private CanvasScaler screenInfoCanvas;
     [SerializeField]
-	private TextMeshProUGUI display;
+    private TextMeshProUGUI display;
     private bool isFullScreen = false;
-    private UniversalRenderPipelineAsset urpAsset;
+
+    #if (UNITY_WEBGL || UNITY_WEBGPU) && !UNITY_EDITOR
+    [DllImport("__Internal")]
+    private static extern int GetBrowserCanvasWidth();
+    [DllImport("__Internal")]
+    private static extern int GetBrowserCanvasHeight();
+    #endif
 
 
     void Awake ()
     {
-        urpAsset = GraphicsSettings.currentRenderPipeline as UniversalRenderPipelineAsset;
-
         Screen.SetResolution(1280, 720, false);
         screenInfoCanvas.scaleFactor = 720f / 1080f;
         StartCoroutine(UpdateDisplay());
     }
 
-
-    public void AdjustRenderScale(float value)
-    {
-        if (value == 0) {
-            urpAsset.renderScale = 0.5f;
-        }
-
-        if (value == 1) {
-            urpAsset.renderScale = 0.75f;
-        }
-
-        if (value == 2) {
-            urpAsset.renderScale = 1.0f;
-        }
-    }
-
-
-    public void ToggleUpscale(bool value)
-    {
-        if (value) {
-            urpAsset.upscalingFilter = UpscalingFilterSelection.FSR;
-            // urpAsset.fsrSharpness = 0.8f;
-        } else {
-            urpAsset.upscalingFilter = UpscalingFilterSelection.Auto;
-        }
-    }
-
-
     public void FullscreenSwitch(bool value)
     {
-        isFullScreen = !isFullScreen;
+        isFullScreen = value;
         
+        #if UNITY_WEBGL && !UNITY_EDITOR
+        if (value)
+        {
+            Application.ExternalEval("document.getElementById('unity-canvas').requestFullscreen();");
+        }
+        else
+        {
+            Application.ExternalEval("document.exitFullscreen();");
+        }
+        #else
+
         if (value)
         {
             Screen.SetResolution(Screen.currentResolution.width, Screen.currentResolution.height, true);
             screenInfoCanvas.scaleFactor = (float)Screen.currentResolution.height / 1080f;
-        } else
+        } 
+        else
         {
             Screen.SetResolution(1280, 720, false);
             screenInfoCanvas.scaleFactor = 720f / 1080f;
         }
+        #endif
 
         StartCoroutine(UpdateDisplay());
     }
 
-
     private IEnumerator UpdateDisplay()
     {
-        yield return new WaitForSeconds(0.05f);
+        yield return new WaitForSeconds(0.15f);
+
+        #if UNITY_WEBGL && !UNITY_EDITOR
+        int webWidth = GetBrowserCanvasWidth();
+        int webHeight = GetBrowserCanvasHeight();
+        
+        display.SetText("Resolution\n" + webWidth + " x " + webHeight);
+
+        if (isFullScreen)
+        {
+            screenInfoCanvas.scaleFactor = (float)webHeight / 1080f;
+        }
+        else
+        {
+            screenInfoCanvas.scaleFactor = 720f / 1080f;
+        }
+        #else
+
         display.SetText("Resolution" + "\n" + Screen.width + " x " + Screen.height);
+
+        #endif
     }
 }
